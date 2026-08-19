@@ -49,6 +49,12 @@ on:
         type: boolean
         default: true
 
+      pull_env:
+        description: Pull latest env files from gist before deployment
+        required: false
+        type: boolean
+        default: false
+
 permissions:
   contents: read
 
@@ -71,6 +77,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           FORCE_RECREATE: ${{ inputs.force_recreate }}
           SUDO: ${{ inputs.sudo }}
+          PULL_ENV: ${{ inputs.pull_env }}
         run: |
           set -Eeuo pipefail
 
@@ -119,6 +126,15 @@ jobs:
               ;;
           esac
 
+          case "${PULL_ENV}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid pull_env value: ${PULL_ENV}"
+              exit 1
+              ;;
+          esac
+
           if [ "${FORCE_RECREATE}" = "true" ] && [ "${ACTION}" != "up" ]; then
             echo "::warning::force_recreate=true is only used when action=up."
             echo "::warning::Main workflow will ignore it for restart/rollout."
@@ -150,6 +166,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           FORCE_RECREATE: ${{ inputs.force_recreate }}
           SUDO: ${{ inputs.sudo }}
+          PULL_ENV: ${{ inputs.pull_env }}
         run: |
           set -Eeuo pipefail
 
@@ -188,6 +205,7 @@ jobs:
           echo "Action: ${ACTION}"
           echo "Force recreate: ${FORCE_RECREATE}"
           echo "Sudo: ${SUDO}"
+          echo "Pull env: ${PULL_ENV}"
 
           gh api \
             -X POST \
@@ -198,7 +216,8 @@ jobs:
             -f inputs[build]="${BUILD}" \
             -f inputs[action]="${ACTION}" \
             -f inputs[force_recreate]="${FORCE_RECREATE}" \
-            -f inputs[sudo]="${SUDO}"
+            -f inputs[sudo]="${SUDO}" \
+            -f inputs[pull_env]="${PULL_ENV}"
 
           echo "Main CI/CD deployment workflow triggered successfully."
 
@@ -211,6 +230,7 @@ jobs:
           ACTION: ${{ inputs.action }}
           FORCE_RECREATE: ${{ inputs.force_recreate }}
           SUDO: ${{ inputs.sudo }}
+          PULL_ENV: ${{ inputs.pull_env }}
 
           TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
           TARGET_REPO: ${{ secrets.TARGET_REPO }}
@@ -233,6 +253,7 @@ jobs:
             echo "| Action | \`${ACTION}\` |"
             echo "| Force recreate | \`${FORCE_RECREATE}\` |"
             echo "| Sudo | \`${SUDO}\` |"
+            echo "| Pull env | \`${PULL_ENV}\` |"
             echo ""
             echo "Triggered from:"
             echo ""
