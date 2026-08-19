@@ -24,7 +24,7 @@ on:
         description: Build images before restart/rollout
         required: false
         type: boolean
-        default: false
+        default: true
 
       action:
         description: What to do after optional build
