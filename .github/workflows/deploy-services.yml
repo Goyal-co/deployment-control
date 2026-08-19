@@ -11,6 +11,7 @@ on:
         description: Select server to deploy
         required: true
         type: choice
+        default: goyal-main-ec2
         options:
           - goyal-main-ec2
 
@@ -18,10 +19,10 @@ on:
         description: App services, comma-separated. Empty = all app services
         required: false
         type: string
-        default: ""
+        default: "app"
 
       build:
-        description: Build images before restart/rollout
+        description: Build images before restart/rollout/up
         required: false
         type: boolean
         default: true
@@ -33,7 +34,14 @@ on:
         options:
           - restart
           - rollout
-        default: restart
+          - up
+        default: rollout
+
+      force_recreate:
+        description: With action=up, also pass --force-recreate
+        required: false
+        type: boolean
+        default: false
 
       sudo:
         description: Run docker / docker compose with sudo
@@ -61,6 +69,7 @@ jobs:
           SERVICES: ${{ inputs.services }}
           BUILD: ${{ inputs.build }}
           ACTION: ${{ inputs.action }}
+          FORCE_RECREATE: ${{ inputs.force_recreate }}
           SUDO: ${{ inputs.sudo }}
         run: |
           set -Eeuo pipefail
@@ -75,7 +84,7 @@ jobs:
           esac
 
           case "${ACTION}" in
-            restart|rollout)
+            restart|rollout|up)
               ;;
             *)
               echo "::error::Invalid action: ${ACTION}"
@@ -92,6 +101,15 @@ jobs:
               ;;
           esac
 
+          case "${FORCE_RECREATE}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid force_recreate value: ${FORCE_RECREATE}"
+              exit 1
+              ;;
+          esac
+
           case "${SUDO}" in
             true|false)
               ;;
@@ -100,6 +118,11 @@ jobs:
               exit 1
               ;;
           esac
+
+          if [ "${FORCE_RECREATE}" = "true" ] && [ "${ACTION}" != "up" ]; then
+            echo "::warning::force_recreate=true is only used when action=up."
+            echo "::warning::Main workflow will ignore it for restart/rollout."
+          fi
 
           if [ -n "${SERVICES}" ]; then
             if ! [[ "${SERVICES}" =~ ^[a-zA-Z0-9._-]+([[:space:]]*,[[:space:]]*[a-zA-Z0-9._-]+)*$ ]]; then
@@ -125,6 +148,7 @@ jobs:
           SERVICES: ${{ inputs.services }}
           BUILD: ${{ inputs.build }}
           ACTION: ${{ inputs.action }}
+          FORCE_RECREATE: ${{ inputs.force_recreate }}
           SUDO: ${{ inputs.sudo }}
         run: |
           set -Eeuo pipefail
@@ -162,6 +186,7 @@ jobs:
           echo "Services: ${SERVICES:-all}"
           echo "Build: ${BUILD}"
           echo "Action: ${ACTION}"
+          echo "Force recreate: ${FORCE_RECREATE}"
           echo "Sudo: ${SUDO}"
 
           gh api \
@@ -172,6 +197,7 @@ jobs:
             -f inputs[services]="${SERVICES}" \
             -f inputs[build]="${BUILD}" \
             -f inputs[action]="${ACTION}" \
+            -f inputs[force_recreate]="${FORCE_RECREATE}" \
             -f inputs[sudo]="${SUDO}"
 
           echo "Main CI/CD deployment workflow triggered successfully."
@@ -183,6 +209,7 @@ jobs:
           SERVICES: ${{ inputs.services }}
           BUILD: ${{ inputs.build }}
           ACTION: ${{ inputs.action }}
+          FORCE_RECREATE: ${{ inputs.force_recreate }}
           SUDO: ${{ inputs.sudo }}
 
           TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
@@ -204,6 +231,7 @@ jobs:
             echo "| Services | \`${SERVICES:-all}\` |"
             echo "| Build | \`${BUILD}\` |"
             echo "| Action | \`${ACTION}\` |"
+            echo "| Force recreate | \`${FORCE_RECREATE}\` |"
             echo "| Sudo | \`${SUDO}\` |"
             echo ""
             echo "Triggered from:"
