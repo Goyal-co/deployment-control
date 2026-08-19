@@ -1,0 +1,212 @@
+name: Deploy Services
+
+run-name: >-
+  Deploy ${{ inputs.services || 'all services' }} to ${{ inputs.environment }}
+  by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+    inputs:
+      environment:
+        description: Select server to deploy
+        required: true
+        type: choice
+        options:
+          - goyal-main-ec2
+
+      services:
+        description: App services, comma-separated. Empty = all app services
+        required: false
+        type: string
+        default: ""
+
+      build:
+        description: Build images before restart/rollout
+        required: false
+        type: boolean
+        default: false
+
+      action:
+        description: What to do after optional build
+        required: true
+        type: choice
+        options:
+          - restart
+          - rollout
+        default: restart
+
+      sudo:
+        description: Run docker / docker compose with sudo
+        required: false
+        type: boolean
+        default: true
+
+permissions:
+  contents: read
+
+concurrency:
+  group: request-deploy-${{ inputs.environment }}
+  cancel-in-progress: false
+
+jobs:
+  trigger-main-cicd:
+    name: Trigger main CI/CD deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    steps:
+      - name: Validate request
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SERVICES: ${{ inputs.services }}
+          BUILD: ${{ inputs.build }}
+          ACTION: ${{ inputs.action }}
+          SUDO: ${{ inputs.sudo }}
+        run: |
+          set -Eeuo pipefail
+
+          case "${ENVIRONMENT}" in
+            goyal-main-ec2)
+              ;;
+            *)
+              echo "::error::Invalid environment: ${ENVIRONMENT}"
+              exit 1
+              ;;
+          esac
+
+          case "${ACTION}" in
+            restart|rollout)
+              ;;
+            *)
+              echo "::error::Invalid action: ${ACTION}"
+              exit 1
+              ;;
+          esac
+
+          case "${BUILD}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid build value: ${BUILD}"
+              exit 1
+              ;;
+          esac
+
+          case "${SUDO}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid sudo value: ${SUDO}"
+              exit 1
+              ;;
+          esac
+
+          if [ -n "${SERVICES}" ]; then
+            if ! [[ "${SERVICES}" =~ ^[a-zA-Z0-9._-]+([[:space:]]*,[[:space:]]*[a-zA-Z0-9._-]+)*$ ]]; then
+              echo "::error::Invalid services format."
+              echo "Use comma-separated compose service names, example:"
+              echo "api,worker,frontend"
+              exit 1
+            fi
+          fi
+
+          echo "Request validation passed."
+
+      - name: Trigger deployment workflow in main CI/CD repo
+        env:
+          GH_TOKEN: ${{ secrets.MAIN_REPO_ACTIONS_TOKEN }}
+
+          TARGET_OWNER: ${{ vars.TARGET_OWNER }}
+          TARGET_REPO: ${{ vars.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ vars.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ vars.TARGET_REF }}
+
+          ENVIRONMENT: ${{ inputs.environment }}
+          SERVICES: ${{ inputs.services }}
+          BUILD: ${{ inputs.build }}
+          ACTION: ${{ inputs.action }}
+          SUDO: ${{ inputs.sudo }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Missing secret: MAIN_REPO_ACTIONS_TOKEN"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_OWNER}" ]; then
+            echo "::error::Missing variable: TARGET_OWNER"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_REPO}" ]; then
+            echo "::error::Missing variable: TARGET_REPO"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_WORKFLOW}" ]; then
+            echo "::error::Missing variable: TARGET_WORKFLOW"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_REF}" ]; then
+            echo "::error::Missing variable: TARGET_REF"
+            exit 1
+          fi
+
+          echo "Triggering main deployment workflow..."
+          echo "Target repo: ${TARGET_OWNER}/${TARGET_REPO}"
+          echo "Target workflow: ${TARGET_WORKFLOW}"
+          echo "Target ref: ${TARGET_REF}"
+          echo "Environment: ${ENVIRONMENT}"
+          echo "Services: ${SERVICES:-all}"
+          echo "Build: ${BUILD}"
+          echo "Action: ${ACTION}"
+          echo "Sudo: ${SUDO}"
+
+          gh api \
+            -X POST \
+            "repos/${TARGET_OWNER}/${TARGET_REPO}/actions/workflows/${TARGET_WORKFLOW}/dispatches" \
+            -f ref="${TARGET_REF}" \
+            -f inputs[environment]="${ENVIRONMENT}" \
+            -f inputs[services]="${SERVICES}" \
+            -f inputs[build]="${BUILD}" \
+            -f inputs[action]="${ACTION}" \
+            -f inputs[sudo]="${SUDO}"
+
+          echo "Main CI/CD deployment workflow triggered successfully."
+
+      - name: Deployment request summary
+        if: always()
+        env:
+          ENVIRONMENT: ${{ inputs.environment }}
+          SERVICES: ${{ inputs.services }}
+          BUILD: ${{ inputs.build }}
+          ACTION: ${{ inputs.action }}
+          SUDO: ${{ inputs.sudo }}
+          TARGET_OWNER: ${{ vars.TARGET_OWNER }}
+          TARGET_REPO: ${{ vars.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ vars.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ vars.TARGET_REF }}
+        run: |
+          {
+            echo "## Deployment Request"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Status | \`${{ job.status }}\` |"
+            echo "| Requested By | \`${GITHUB_ACTOR}\` |"
+            echo "| Target Repo | \`${TARGET_OWNER}/${TARGET_REPO}\` |"
+            echo "| Target Workflow | \`${TARGET_WORKFLOW}\` |"
+            echo "| Target Ref | \`${TARGET_REF}\` |"
+            echo "| Environment | \`${ENVIRONMENT}\` |"
+            echo "| Services | \`${SERVICES:-all}\` |"
+            echo "| Build | \`${BUILD}\` |"
+            echo "| Action | \`${ACTION}\` |"
+            echo "| Sudo | \`${SUDO}\` |"
+            echo ""
+            echo "Triggered from:"
+            echo ""
+            echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } >> "${GITHUB_STEP_SUMMARY}"
+        
