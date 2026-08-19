@@ -116,10 +116,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MAIN_REPO_ACTIONS_TOKEN }}
 
-          TARGET_OWNER: ${{ vars.TARGET_OWNER }}
-          TARGET_REPO: ${{ vars.TARGET_REPO }}
-          TARGET_WORKFLOW: ${{ vars.TARGET_WORKFLOW }}
-          TARGET_REF: ${{ vars.TARGET_REF }}
+          TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
+          TARGET_REPO: ${{ secrets.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ secrets.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ secrets.TARGET_REF }}
 
           ENVIRONMENT: ${{ inputs.environment }}
           SERVICES: ${{ inputs.services }}
@@ -135,22 +135,22 @@ jobs:
           fi
 
           if [ -z "${TARGET_OWNER}" ]; then
-            echo "::error::Missing variable: TARGET_OWNER"
+            echo "::error::Missing secret: TARGET_OWNER"
             exit 1
           fi
 
           if [ -z "${TARGET_REPO}" ]; then
-            echo "::error::Missing variable: TARGET_REPO"
+            echo "::error::Missing secret: TARGET_REPO"
             exit 1
           fi
 
           if [ -z "${TARGET_WORKFLOW}" ]; then
-            echo "::error::Missing variable: TARGET_WORKFLOW"
+            echo "::error::Missing secret: TARGET_WORKFLOW"
             exit 1
           fi
 
           if [ -z "${TARGET_REF}" ]; then
-            echo "::error::Missing variable: TARGET_REF"
+            echo "::error::Missing secret: TARGET_REF"
             exit 1
           fi
 
@@ -184,10 +184,11 @@ jobs:
           BUILD: ${{ inputs.build }}
           ACTION: ${{ inputs.action }}
           SUDO: ${{ inputs.sudo }}
-          TARGET_OWNER: ${{ vars.TARGET_OWNER }}
-          TARGET_REPO: ${{ vars.TARGET_REPO }}
-          TARGET_WORKFLOW: ${{ vars.TARGET_WORKFLOW }}
-          TARGET_REF: ${{ vars.TARGET_REF }}
+
+          TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
+          TARGET_REPO: ${{ secrets.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ secrets.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ secrets.TARGET_REF }}
         run: |
           {
             echo "## Deployment Request"
@@ -209,4 +210,3 @@ jobs:
             echo ""
             echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
           } >> "${GITHUB_STEP_SUMMARY}"
-        
