@@ -1,6 +1,6 @@
 name: Deploy TitanCRM
 
-run-name: Deploy titancrm/app to goyal-main-ec2 by @${{ github.actor }}
+run-name: Deploy titancrm/all build services to goyal-main-ec2 by @${{ github.actor }}
 
 on:
   workflow_dispatch:
@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: request-deploy-goyal-main-ec2-titancrm-app
+  group: request-deploy-goyal-main-ec2-titancrm-all-services
   cancel-in-progress: false
 
 jobs:
@@ -21,7 +21,7 @@ jobs:
     env:
       DEPLOY_ENVIRONMENT: goyal-main-ec2
       DEPLOY_PROJECT: titancrm
-      DEPLOY_SERVICES: app
+      DEPLOY_SERVICES: ""
       DEPLOY_BUILD: "true"
       DEPLOY_ACTION: rollout
       DEPLOY_FORCE_RECREATE: "false"
@@ -150,7 +150,7 @@ jobs:
           echo "Target ref: ${TARGET_REF}"
           echo "Environment: ${DEPLOY_ENVIRONMENT}"
           echo "Project: ${DEPLOY_PROJECT}"
-          echo "Services: ${DEPLOY_SERVICES:-all}"
+          echo "Services: ${DEPLOY_SERVICES:-all with build}"
           echo "Build: ${DEPLOY_BUILD}"
           echo "Action: ${DEPLOY_ACTION}"
           echo "Force recreate: ${DEPLOY_FORCE_RECREATE}"
@@ -195,7 +195,7 @@ jobs:
             echo "| Target Ref | \`${TARGET_REF}\` |"
             echo "| Environment | \`${DEPLOY_ENVIRONMENT}\` |"
             echo "| Project | \`${DEPLOY_PROJECT}\` |"
-            echo "| Services | \`${DEPLOY_SERVICES:-all}\` |"
+            echo "| Services | \`${DEPLOY_SERVICES:-all with build}\` |"
             echo "| Build | \`${DEPLOY_BUILD}\` |"
             echo "| Action | \`${DEPLOY_ACTION}\` |"
             echo "| Force recreate | \`${DEPLOY_FORCE_RECREATE}\` |"
