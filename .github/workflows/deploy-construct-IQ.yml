@@ -9,7 +9,7 @@ permissions:
   contents: read
 
 concurrency:
-  group: request-deploy-goyal-main-ec2-titancrm-all-services
+  group: request-deploy-goyal-main-ec2-ciq-all-services
   cancel-in-progress: false
 
 jobs:
@@ -46,7 +46,7 @@ jobs:
           esac
 
           case "${DEPLOY_PROJECT}" in
-            titancrm)
+            ciq)
               ;;
             *)
               echo "::error::Invalid project: ${DEPLOY_PROJECT}"
