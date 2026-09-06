@@ -1,0 +1,211 @@
+name: Deploy Construct IQ
+
+run-name: Deploy Construct IQ build services to goyal-main-ec2 by @${{ github.actor }}
+
+on:
+  workflow_dispatch:
+
+permissions:
+  contents: read
+
+concurrency:
+  group: request-deploy-goyal-main-ec2-titancrm-all-services
+  cancel-in-progress: false
+
+jobs:
+  trigger-main-cicd:
+    name: Trigger main CI/CD deployment
+    runs-on: ubuntu-latest
+    timeout-minutes: 10
+
+    env:
+      DEPLOY_ENVIRONMENT: goyal-main-ec2
+      DEPLOY_PROJECT: ciq
+      DEPLOY_SERVICES: ""
+      DEPLOY_BUILD: "true"
+      DEPLOY_ACTION: rollout
+      DEPLOY_FORCE_RECREATE: "false"
+      DEPLOY_SUDO: "true"
+      DEPLOY_PULL_ENV: "false"
+      DEPLOY_GIST_ID: ""
+      DEPLOY_GIST_FILES: ""
+      DEPLOY_ENV_FOLDER: ""
+
+    steps:
+      - name: Validate fixed deployment config
+        run: |
+          set -Eeuo pipefail
+
+          case "${DEPLOY_ENVIRONMENT}" in
+            goyal-main-ec2)
+              ;;
+            *)
+              echo "::error::Invalid environment: ${DEPLOY_ENVIRONMENT}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_PROJECT}" in
+            titancrm)
+              ;;
+            *)
+              echo "::error::Invalid project: ${DEPLOY_PROJECT}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_ACTION}" in
+            restart|rollout|up)
+              ;;
+            *)
+              echo "::error::Invalid action: ${DEPLOY_ACTION}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_BUILD}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid build value: ${DEPLOY_BUILD}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_FORCE_RECREATE}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid force_recreate value: ${DEPLOY_FORCE_RECREATE}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_SUDO}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid sudo value: ${DEPLOY_SUDO}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_PULL_ENV}" in
+            true|false)
+              ;;
+            *)
+              echo "::error::Invalid pull_env value: ${DEPLOY_PULL_ENV}"
+              exit 1
+              ;;
+          esac
+
+          if [ -n "${DEPLOY_SERVICES}" ]; then
+            if ! [[ "${DEPLOY_SERVICES}" =~ ^[a-zA-Z0-9._-]+([[:space:]]*,[[:space:]]*[a-zA-Z0-9._-]+)*$ ]]; then
+              echo "::error::Invalid services format: ${DEPLOY_SERVICES}"
+              exit 1
+            fi
+          fi
+
+          echo "Fixed deployment config is valid."
+
+      - name: Trigger deployment workflow in main CI/CD repo
+        env:
+          GH_TOKEN: ${{ secrets.MAIN_REPO_ACTIONS_TOKEN }}
+
+          TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
+          TARGET_REPO: ${{ secrets.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ secrets.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ secrets.TARGET_REF }}
+        run: |
+          set -Eeuo pipefail
+
+          if [ -z "${GH_TOKEN}" ]; then
+            echo "::error::Missing secret: MAIN_REPO_ACTIONS_TOKEN"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_OWNER}" ]; then
+            echo "::error::Missing secret: TARGET_OWNER"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_REPO}" ]; then
+            echo "::error::Missing secret: TARGET_REPO"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_WORKFLOW}" ]; then
+            echo "::error::Missing secret: TARGET_WORKFLOW"
+            exit 1
+          fi
+
+          if [ -z "${TARGET_REF}" ]; then
+            echo "::error::Missing secret: TARGET_REF"
+            exit 1
+          fi
+
+          echo "Triggering main deployment workflow..."
+          echo "Target repo: ${TARGET_OWNER}/${TARGET_REPO}"
+          echo "Target workflow: ${TARGET_WORKFLOW}"
+          echo "Target ref: ${TARGET_REF}"
+          echo "Environment: ${DEPLOY_ENVIRONMENT}"
+          echo "Project: ${DEPLOY_PROJECT}"
+          echo "Services: ${DEPLOY_SERVICES:-all with build}"
+          echo "Build: ${DEPLOY_BUILD}"
+          echo "Action: ${DEPLOY_ACTION}"
+          echo "Force recreate: ${DEPLOY_FORCE_RECREATE}"
+          echo "Sudo: ${DEPLOY_SUDO}"
+          echo "Pull env: ${DEPLOY_PULL_ENV}"
+
+          gh api \
+            -X POST \
+            "repos/${TARGET_OWNER}/${TARGET_REPO}/actions/workflows/${TARGET_WORKFLOW}/dispatches" \
+            -f ref="${TARGET_REF}" \
+            -f inputs[environment]="${DEPLOY_ENVIRONMENT}" \
+            -f inputs[project]="${DEPLOY_PROJECT}" \
+            -f inputs[services]="${DEPLOY_SERVICES}" \
+            -f inputs[build]="${DEPLOY_BUILD}" \
+            -f inputs[action]="${DEPLOY_ACTION}" \
+            -f inputs[force_recreate]="${DEPLOY_FORCE_RECREATE}" \
+            -f inputs[sudo]="${DEPLOY_SUDO}" \
+            -f inputs[pull_env]="${DEPLOY_PULL_ENV}" \
+            -f inputs[gist_id]="${DEPLOY_GIST_ID}" \
+            -f inputs[gist_files]="${DEPLOY_GIST_FILES}" \
+            -f inputs[env_folder]="${DEPLOY_ENV_FOLDER}"
+
+          echo "Main CI/CD deployment workflow triggered successfully."
+
+      - name: Deployment request summary
+        if: always()
+        env:
+          TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
+          TARGET_REPO: ${{ secrets.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ secrets.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ secrets.TARGET_REF }}
+        run: |
+          {
+            echo "## Deployment Request"
+            echo ""
+            echo "| Field | Value |"
+            echo "| --- | --- |"
+            echo "| Status | \`${{ job.status }}\` |"
+            echo "| Requested By | \`${GITHUB_ACTOR}\` |"
+            echo "| Target Repo | \`${TARGET_OWNER}/${TARGET_REPO}\` |"
+            echo "| Target Workflow | \`${TARGET_WORKFLOW}\` |"
+            echo "| Target Ref | \`${TARGET_REF}\` |"
+            echo "| Environment | \`${DEPLOY_ENVIRONMENT}\` |"
+            echo "| Project | \`${DEPLOY_PROJECT}\` |"
+            echo "| Services | \`${DEPLOY_SERVICES:-all with build}\` |"
+            echo "| Build | \`${DEPLOY_BUILD}\` |"
+            echo "| Action | \`${DEPLOY_ACTION}\` |"
+            echo "| Force recreate | \`${DEPLOY_FORCE_RECREATE}\` |"
+            echo "| Sudo | \`${DEPLOY_SUDO}\` |"
+            echo "| Pull env | \`${DEPLOY_PULL_ENV}\` |"
+            echo "| Gist ID | \`${DEPLOY_GIST_ID:-not used}\` |"
+            echo "| Gist files | \`${DEPLOY_GIST_FILES:-not used}\` |"
+            echo "| Env folder | \`${DEPLOY_ENV_FOLDER:-default}\` |"
+            echo ""
+            echo "Triggered from:"
+            echo ""
+            echo "${GITHUB_SERVER_URL}/${GITHUB_REPOSITORY}/actions/runs/${GITHUB_RUN_ID}"
+          } >> "${GITHUB_STEP_SUMMARY}"
