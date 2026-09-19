@@ -1,3 +1,17 @@
+# Copy into the Construct IQ (ciq) app repo as:
+#   .github/workflows/deploy-construct-iq.yml
+# This file lives at the root of CI-CD-template as the canonical caller example.
+#
+# Triggers workflow "2. Deploy Services" on dhimanparas20/CI-CD-template
+# with deployer=Goyal-co (audit label for cross-repo triggers).
+#
+# Required secrets on the *calling* repo:
+#   MAIN_REPO_ACTIONS_TOKEN  — PAT/fine-grained token that can dispatch workflows on TARGET_*
+#   TARGET_OWNER             — e.g. dhimanparas20
+#   TARGET_REPO              — e.g. CI-CD-template
+#   TARGET_WORKFLOW          — e.g. 2_deploy-services.yml
+#   TARGET_REF               — e.g. main
+
 name: Deploy Construct IQ
 
 run-name: Deploy Construct IQ build services to goyal-main-ec2 by @${{ github.actor }}
@@ -20,6 +34,7 @@ jobs:
 
     env:
       DEPLOY_ENVIRONMENT: goyal-main-ec2
+      DEPLOY_DEPLOYER: Goyal-co
       DEPLOY_PROJECT: ciq
       DEPLOY_SERVICES: ""
       DEPLOY_BUILD: "true"
@@ -41,6 +56,15 @@ jobs:
               ;;
             *)
               echo "::error::Invalid environment: ${DEPLOY_ENVIRONMENT}"
+              exit 1
+              ;;
+          esac
+
+          case "${DEPLOY_DEPLOYER}" in
+            dhimanparas20|Goyal-co)
+              ;;
+            *)
+              echo "::error::Invalid deployer: ${DEPLOY_DEPLOYER}"
               exit 1
               ;;
           esac
@@ -149,6 +173,7 @@ jobs:
           echo "Target workflow: ${TARGET_WORKFLOW}"
           echo "Target ref: ${TARGET_REF}"
           echo "Environment: ${DEPLOY_ENVIRONMENT}"
+          echo "Deployer: ${DEPLOY_DEPLOYER}"
           echo "Project: ${DEPLOY_PROJECT}"
           echo "Services: ${DEPLOY_SERVICES:-all with build}"
           echo "Build: ${DEPLOY_BUILD}"
@@ -162,6 +187,7 @@ jobs:
             "repos/${TARGET_OWNER}/${TARGET_REPO}/actions/workflows/${TARGET_WORKFLOW}/dispatches" \
             -f ref="${TARGET_REF}" \
             -f inputs[environment]="${DEPLOY_ENVIRONMENT}" \
+            -f inputs[deployer]="${DEPLOY_DEPLOYER}" \
             -f inputs[project]="${DEPLOY_PROJECT}" \
             -f inputs[services]="${DEPLOY_SERVICES}" \
             -f inputs[build]="${DEPLOY_BUILD}" \
@@ -194,6 +220,7 @@ jobs:
             echo "| Target Workflow | \`${TARGET_WORKFLOW}\` |"
             echo "| Target Ref | \`${TARGET_REF}\` |"
             echo "| Environment | \`${DEPLOY_ENVIRONMENT}\` |"
+            echo "| Deployer | \`${DEPLOY_DEPLOYER}\` |"
             echo "| Project | \`${DEPLOY_PROJECT}\` |"
             echo "| Services | \`${DEPLOY_SERVICES:-all with build}\` |"
             echo "| Build | \`${DEPLOY_BUILD}\` |"
