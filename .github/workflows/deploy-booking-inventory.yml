@@ -5,12 +5,12 @@
 # Triggers workflow "2. Deploy Services" on dhimanparas20/CI-CD-template
 # with deployer=Goyal-co (audit label for cross-repo triggers).
 #
-# Required secrets on the *calling* repo:
-#   MAIN_REPO_ACTIONS_TOKEN  — PAT/fine-grained token that can dispatch workflows on TARGET_*
-#   TARGET_OWNER             — e.g. dhimanparas20
-#   TARGET_REPO              — e.g. CI-CD-template
-#   TARGET_WORKFLOW          — e.g. 2_deploy-services.yml
-#   TARGET_REF               — e.g. main
+# Required on the *calling* repo:
+#   Secret MAIN_REPO_ACTIONS_TOKEN — PAT/fine-grained token that can dispatch workflows on TARGET_*
+#   Variable TARGET_OWNER          — e.g. dhimanparas20
+#   Variable TARGET_REPO           — e.g. CI-CD-template
+#   Variable TARGET_WORKFLOW       — e.g. 2_deploy-services.yml
+#   Variable TARGET_REF            — e.g. main
 
 name: Deploy Booking Inventory
 
@@ -136,10 +136,10 @@ jobs:
         env:
           GH_TOKEN: ${{ secrets.MAIN_REPO_ACTIONS_TOKEN }}
 
-          TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
-          TARGET_REPO: ${{ secrets.TARGET_REPO }}
-          TARGET_WORKFLOW: ${{ secrets.TARGET_WORKFLOW }}
-          TARGET_REF: ${{ secrets.TARGET_REF }}
+          TARGET_OWNER: ${{ vars.TARGET_OWNER }}
+          TARGET_REPO: ${{ vars.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ vars.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ vars.TARGET_REF }}
         run: |
           set -Eeuo pipefail
 
@@ -149,22 +149,22 @@ jobs:
           fi
 
           if [ -z "${TARGET_OWNER}" ]; then
-            echo "::error::Missing secret: TARGET_OWNER"
+            echo "::error::Missing variable: TARGET_OWNER"
             exit 1
           fi
 
           if [ -z "${TARGET_REPO}" ]; then
-            echo "::error::Missing secret: TARGET_REPO"
+            echo "::error::Missing variable: TARGET_REPO"
             exit 1
           fi
 
           if [ -z "${TARGET_WORKFLOW}" ]; then
-            echo "::error::Missing secret: TARGET_WORKFLOW"
+            echo "::error::Missing variable: TARGET_WORKFLOW"
             exit 1
           fi
 
           if [ -z "${TARGET_REF}" ]; then
-            echo "::error::Missing secret: TARGET_REF"
+            echo "::error::Missing variable: TARGET_REF"
             exit 1
           fi
 
@@ -204,10 +204,10 @@ jobs:
       - name: Deployment request summary
         if: always()
         env:
-          TARGET_OWNER: ${{ secrets.TARGET_OWNER }}
-          TARGET_REPO: ${{ secrets.TARGET_REPO }}
-          TARGET_WORKFLOW: ${{ secrets.TARGET_WORKFLOW }}
-          TARGET_REF: ${{ secrets.TARGET_REF }}
+          TARGET_OWNER: ${{ vars.TARGET_OWNER }}
+          TARGET_REPO: ${{ vars.TARGET_REPO }}
+          TARGET_WORKFLOW: ${{ vars.TARGET_WORKFLOW }}
+          TARGET_REF: ${{ vars.TARGET_REF }}
         run: |
           {
             echo "## Deployment Request"
