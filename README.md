@@ -5,9 +5,10 @@ This repository is a lightweight deployment trigger/control layer.
 It does **not** contain the main CI/CD deployment code, server SSH credentials,
 Docker deployment scripts, or application source code.
 
-Instead, this repo exposes a GitHub Actions workflow that allows an authorized
-user/client to request deployments. The workflow then triggers the actual
-deployment workflow in the private main CI/CD repository.
+Instead, this repo exposes GitHub Actions workflows that allow an authorized
+user/client to request deployments. Each workflow then triggers the actual
+deployment workflow in the private main CI/CD repository, with
+`deployer: Goyal-co` so runs are auditable on the CI/CD side.
 
 ---
 
@@ -18,13 +19,14 @@ This repo provides a controlled GitHub Actions UI for deployments.
 Flow:
 
 ```text
-User runs workflow in this control repo
+User runs a Deploy * workflow in this control repo
         |
         v
 This repo calls GitHub Actions API
         |
         v
 Private main CI/CD repo workflow is triggered
+  (2. Deploy Services · <project> · Goyal-co)
         |
         v
 Main CI/CD repo connects to server via SSH
@@ -39,6 +41,8 @@ This repo only sends deployment inputs such as:
 
 ```text
 environment
+deployer          ← always Goyal-co from these callers
+project
 services
 build
 action
@@ -59,15 +63,43 @@ deployment logic and secrets stay protected inside the main CI/CD repo.
 
 ---
 
-## Required GitHub Actions secrets
+## Workflows in this repo
 
-Add these in this repository:
+Copy the matching file from `CI-CD-template` (repo root examples) into
+`.github/workflows/` here:
+
+| Workflow (Actions UI) | File | Fixed project | Fixed services |
+| --- | --- | --- | --- |
+| Deploy Booking Inventory | `deploy-booking-inventory.yml` | `booking-inventory` | all with `build:` |
+| Deploy Construct IQ | `deploy-construct-iq.yml` | `ciq` | all with `build:` |
+| Deploy PartnerGoyal | `deploy-partnergoyal.yml` | `partnergoyal` | `app` |
+| Deploy TitanCRM | `deploy-titancrm.yml` | `titancrm` | all with `build:` |
+
+Each caller is **fixed-config** (`workflow_dispatch` with no extra inputs). Defaults:
 
 ```text
-Settings -> Secrets and variables -> Actions -> Repository secrets
+environment:     goyal-main-ec2
+deployer:        Goyal-co
+build:           true
+action:          rollout
+force_recreate:  false
+sudo:            true
+pull_env:        false
 ```
 
-### `MAIN_REPO_ACTIONS_TOKEN`
+To change behavior, edit the `env:` block in that workflow file (not GitHub secrets).
+
+---
+
+## Required Actions configuration
+
+```text
+Settings -> Secrets and variables -> Actions
+```
+
+### Repository secret (1)
+
+#### `MAIN_REPO_ACTIONS_TOKEN`
 
 GitHub fine-grained personal access token used to trigger the workflow in the
 private main CI/CD repo.
@@ -106,101 +138,50 @@ Secrets
 
 ---
 
-### `TARGET_OWNER`
+### Repository variables (4)
 
-GitHub username or organization that owns the private main CI/CD repo.
-
-Example value:
+These are **not** secrets — they are plain config. Set them under:
 
 ```text
-dhimanparas20
+Settings -> Secrets and variables -> Actions -> Variables
 ```
 
----
+| Variable | Default value | Description |
+| --- | --- | --- |
+| `TARGET_OWNER` | `dhimanparas20` | Owner of the private CI/CD repo |
+| `TARGET_REPO` | `CI-CD-template` | Private CI/CD repo name |
+| `TARGET_WORKFLOW` | `2_deploy-services.yml` | Workflow **file name** under `.github/workflows/` |
+| `TARGET_REF` | `main` | Branch/ref that contains that workflow |
 
-### `TARGET_REPO`
+#### `TARGET_WORKFLOW` — file name, not display name
 
-Name of the private main CI/CD repository.
-
-Example value:
-
-```text
-CI-CD-template
-```
-
----
-
-### `TARGET_WORKFLOW`
-
-Actual workflow file name inside the main CI/CD repo.
-
-This must be the file name inside:
-
-```text
-.github/workflows/
-```
-
-Example values:
-
-```text
-2-deploy-services.yml
-```
-
-or:
-
-```text
-deploy-services.yml
-```
-
-Important:
-
-Do not use the workflow display name.
-
-For example, if the main workflow starts with:
+The main CI/CD workflow starts with:
 
 ```yaml
 name: 2. Deploy Services
 ```
 
-that does not mean `TARGET_WORKFLOW` should be `2. Deploy Services`.
+That does **not** mean `TARGET_WORKFLOW` should be `2. Deploy Services`.
 
-Use the actual file name, for example:
+Use the actual file name:
 
 ```text
-2-deploy-services.yml
+2_deploy-services.yml
 ```
+
+(underscore after `2`, as in the CI/CD-template repo — not `2-deploy-services.yml`)
 
 ---
 
-### `TARGET_REF`
+## Config summary
 
-Branch or Git ref where the target workflow exists in the main CI/CD repo.
-
-Example value:
-
-```text
-main
-```
-
-If your main CI/CD workflow is on another branch, use that branch name.
-
-Example:
-
-```text
-production
-```
-
----
-
-## Required secrets summary
-
-| Secret name | Description | Example value |
+| Name | Type | Default / example |
 | --- | --- | --- |
-| `MAIN_REPO_ACTIONS_TOKEN` | Fine-grained GitHub token used to trigger the private CI/CD repo workflow | `github_pat_xxx` |
-| `TARGET_OWNER` | Owner of the private CI/CD repo | `dhimanparas20` |
-| `TARGET_REPO` | Private CI/CD repo name | `CI-CD-template` |
-| `TARGET_WORKFLOW` | Workflow file name in `.github/workflows/` | `2-deploy-services.yml` |
-| `TARGET_REF` | Branch/ref of the target workflow | `main` |
+| `MAIN_REPO_ACTIONS_TOKEN` | **Secret** | `github_pat_xxx` |
+| `TARGET_OWNER` | **Variable** | `dhimanparas20` |
+| `TARGET_REPO` | **Variable** | `CI-CD-template` |
+| `TARGET_WORKFLOW` | **Variable** | `2_deploy-services.yml` |
+| `TARGET_REF` | **Variable** | `main` |
 
 ---
 
@@ -208,304 +189,99 @@ production
 
 The control repo should not contain server or deployment secrets.
 
-Do not add these secrets to this repo:
+Do not add these to this repo:
 
 ```text
 SSH_HOST
 SSH_USER
 SSH_PASSWORD
 SSH_PRIVATE_KEY
+CORE_DIR
 WORK_DIR
 CICD_REPO
 GH_PAT
+GIST_MAP
 GIST_ID
 GIST_FILES
 ```
 
-These belong only in the private main CI/CD repo.
+These belong only in the private main CI/CD repo (GitHub Environment /
+repository secrets there).
 
 ---
 
-## Deployment inputs
+## What each fixed input means (main CI/CD)
 
-When running the workflow manually, GitHub will ask for these inputs.
+Sent to **2. Deploy Services** on `dhimanparas20/CI-CD-template`:
 
 ### `environment`
 
-Target deployment environment/server.
-
-Current supported value:
-
 ```text
 goyal-main-ec2
 ```
 
-Example:
+### `deployer`
 
 ```text
-goyal-main-ec2
+Goyal-co
 ```
 
----
+Shows up in the CI/CD Actions list run title and deployment summary so you can
+tell control-repo triggers apart from runs started as `dhimanparas20`.
 
-### `services`
+### `project` / `services`
 
-Comma-separated Docker Compose service names.
-
-Example:
-
-```text
-app
-```
-
-Multiple services:
-
-```text
-app,worker,api
-```
-
-If left empty, the main CI/CD workflow may deploy all app services that have a
-Dockerfile/build configuration.
-
-Default value:
-
-```text
-app
-```
-
----
+Set per workflow (see table above). Empty `services` means all services with a
+`build:` in that project’s compose file.
 
 ### `build`
 
-Whether to build Docker images before running the deployment action.
-
-Example values:
-
 ```text
-true
+true   ← default in these callers
 false
 ```
-
-Recommended for most deploys:
-
-```text
-true
-```
-
----
 
 ### `action`
 
-Deployment action to perform after optional build.
-
-Available values:
-
 ```text
-restart
-rollout
-up
+restart | rollout | up
 ```
 
-#### `restart`
-
-Runs Docker Compose restart for selected services.
-
-Useful when:
-
-```text
-Code/config already exists on server and only container restart is needed.
-```
-
-#### `rollout`
-
-Runs `docker rollout` for selected services.
-
-Useful when:
-
-```text
-You use docker-rollout for zero/minimal downtime deployments.
-```
-
-#### `up`
-
-Runs:
-
-```text
-docker compose up -d
-```
-
-Useful when:
-
-```text
-You want Docker Compose to recreate/start containers based on latest compose config.
-```
-
----
+Default in these callers: `rollout` (`docker rollout`).
 
 ### `force_recreate`
 
-Only used when:
-
-```text
-action=up
-```
-
-If true, the main workflow passes:
-
-```text
---force-recreate
-```
-
-Example values:
-
-```text
-true
-false
-```
-
-Recommended default:
-
-```text
-false
-```
-
----
+Only meaningful when `action=up`. Default: `false`.
 
 ### `sudo`
 
-Whether to run Docker/Docker Compose commands with sudo on the server.
-
-Example values:
-
-```text
-true
-false
-```
-
-Recommended default:
-
-```text
-true
-```
-
----
+Default: `true` (run docker with sudo on the server).
 
 ### `pull_env`
 
-Whether to pull latest environment files from Gist before deployment.
-
-Example values:
-
-```text
-true
-false
-```
-
-Recommended default:
-
-```text
-false
-```
-
-If set to `true`, the main CI/CD repo must have these secrets configured:
-
-```text
-GH_PAT
-GIST_ID
-GIST_FILES
-```
-
-Those secrets must exist in the main CI/CD repo, not this control repo.
+Default: `false`. If `true`, the **main** CI/CD repo must have gist-related
+secrets (`GH_PAT`, `GIST_MAP`, etc.) — not this control repo.
 
 ---
 
-## Example deployment runs
+## How to run a deployment
 
-### Deploy app with build and rollout
-
-```text
-environment: goyal-main-ec2
-services: app
-build: true
-action: rollout
-force_recreate: false
-sudo: true
-pull_env: false
-```
-
----
-
-### Restart app without building
+1. Open this control repository on GitHub.
+2. Go to **Actions**.
+3. Select one of:
 
 ```text
-environment: goyal-main-ec2
-services: app
-build: false
-action: restart
-force_recreate: false
-sudo: true
-pull_env: false
+Deploy Booking Inventory
+Deploy Construct IQ
+Deploy PartnerGoyal
+Deploy TitanCRM
 ```
 
----
+4. Click **Run workflow** → **Run workflow**.
 
-### Run docker compose up with force recreate
+This dispatches **2. Deploy Services** in the private main CI/CD repo.
 
-```text
-environment: goyal-main-ec2
-services: app
-build: true
-action: up
-force_recreate: true
-sudo: true
-pull_env: false
-```
-
----
-
-### Pull latest env files before deployment
-
-```text
-environment: goyal-main-ec2
-services: app
-build: true
-action: rollout
-force_recreate: false
-sudo: true
-pull_env: true
-```
-
----
-
-## How to run deployment
-
-1. Open this repository on GitHub.
-2. Go to:
-
-```text
-Actions
-```
-
-3. Select:
-
-```text
-Deploy Services
-```
-
-4. Click:
-
-```text
-Run workflow
-```
-
-5. Fill deployment inputs.
-6. Click:
-
-```text
-Run workflow
-```
-
-This will trigger the actual deployment workflow in the private main CI/CD repo.
+Check the real deploy logs there (not only in this control repo).
 
 ---
 
@@ -541,117 +317,66 @@ Use GitHub environments/approvals for production deployments.
 
 GitHub strongly recommends setting an expiration on personal access tokens.
 
-Recommended expiration:
-
-```text
-30 days
-```
-
-or:
-
-```text
-90 days
-```
+Recommended expiration: `30` or `90` days.
 
 When the token expires:
 
 1. Create a new fine-grained PAT.
-2. Give it access only to the main CI/CD repo.
-3. Grant permissions:
-
-```text
-Actions: Read and write
-Contents: Read-only
-Metadata: Read-only
-```
-
-4. Replace this repository secret:
-
-```text
-MAIN_REPO_ACTIONS_TOKEN
-```
+2. Scope it only to `dhimanparas20/CI-CD-template`.
+3. Permissions: Actions (R/W), Contents (R), Metadata (R).
+4. Replace repository secret `MAIN_REPO_ACTIONS_TOKEN`.
 
 ---
 
 ## Troubleshooting
 
-### Error: `Missing secret: TARGET_OWNER`
+### Error: `Missing secret: MAIN_REPO_ACTIONS_TOKEN`
 
-One of the required repository secrets is missing.
+Add the repository **secret** `MAIN_REPO_ACTIONS_TOKEN`.
 
-Check:
+### Error: `Missing variable: TARGET_OWNER` (or other TARGET_*)
 
-```text
-Settings -> Secrets and variables -> Actions -> Repository secrets
-```
-
-Required secrets:
+Add the repository **variables** (not secrets):
 
 ```text
-MAIN_REPO_ACTIONS_TOKEN
 TARGET_OWNER
 TARGET_REPO
 TARGET_WORKFLOW
 TARGET_REF
 ```
 
----
+```text
+Settings -> Secrets and variables -> Actions -> Variables
+```
 
 ### Error: `Resource not accessible by personal access token`
 
-The token does not have enough access to trigger the main workflow.
-
-Check the fine-grained PAT:
-
-```text
-Repository access:
-  dhimanparas20/CI-CD-template
-
-Permissions:
-  Actions: Read and write
-  Contents: Read-only
-  Metadata: Read-only
-```
-
-After updating the token, replace the secret:
-
-```text
-MAIN_REPO_ACTIONS_TOKEN
-```
-
----
+The token cannot dispatch on the main repo. Fix PAT repo access + Actions write,
+then replace `MAIN_REPO_ACTIONS_TOKEN`.
 
 ### Error: `Not Found`
 
-Usually one of these is wrong:
+Usually wrong:
 
 ```text
-TARGET_OWNER
-TARGET_REPO
-TARGET_WORKFLOW
-TARGET_REF
+TARGET_OWNER / TARGET_REPO / TARGET_WORKFLOW / TARGET_REF
 ```
 
-Check that `TARGET_WORKFLOW` is the actual file name inside:
+Confirm `TARGET_WORKFLOW` is exactly:
 
 ```text
-.github/workflows/
+2_deploy-services.yml
 ```
-
-Example:
-
-```text
-2-deploy-services.yml
-```
-
----
 
 ### Workflow triggers successfully but deployment does not run
 
-Check the Actions tab in the private main CI/CD repo.
+Open **Actions** on `dhimanparas20/CI-CD-template`. Look for a run titled like:
 
-The control repo only sends the request. The actual deployment logs are in the
-main CI/CD repository.
+```text
+2. Deploy Services · <project> · Goyal-co
+```
+
+The control repo only sends the request; deploy logs live in the main CI/CD repo.
 
 ---
 
@@ -659,34 +384,34 @@ main CI/CD repository.
 
 ```text
 Control repo
-  Secrets:
+  Secret:
     MAIN_REPO_ACTIONS_TOKEN
-    TARGET_OWNER
-    TARGET_REPO
-    TARGET_WORKFLOW
-    TARGET_REF
 
-  Workflow:
-    Deploy Services
+  Variables (defaults):
+    TARGET_OWNER=dhimanparas20
+    TARGET_REPO=CI-CD-template
+    TARGET_WORKFLOW=2_deploy-services.yml
+    TARGET_REF=main
+
+  Workflows:
+    Deploy Booking Inventory
+    Deploy Construct IQ
+    Deploy PartnerGoyal
+    Deploy TitanCRM
+      deployer=Goyal-co (fixed)
 
         |
         | GitHub Actions workflow_dispatch API
         v
 
-Private main CI/CD repo
+Private main CI/CD repo (dhimanparas20/CI-CD-template)
   Workflow:
-    2. Deploy Services
+    2. Deploy Services   (.github/workflows/2_deploy-services.yml)
 
-  Secrets:
-    SSH_HOST
-    SSH_USER
-    SSH_PASSWORD
-    SSH_PRIVATE_KEY
-    WORK_DIR
-    CICD_REPO
-    GH_PAT
-    GIST_ID
-    GIST_FILES
+  Environment secrets/vars (e.g. goyal-main-ec2):
+    SSH_HOST, SSH_USER, SSH_PRIVATE_KEY / SSH_PASSWORD
+    CORE_DIR, CICD_REPO, …
+    (optional GH_PAT / GIST_MAP if pull_env=true)
 
         |
         | SSH
@@ -712,14 +437,20 @@ Current expected environment:
 goyal-main-ec2
 ```
 
-Current expected workflow input set:
+Current expected target workflow file:
 
 ```text
-environment
-services
-build
-action
-force_recreate
-sudo
-pull_env
+2_deploy-services.yml
 ```
+
+Caller examples (canonical copies) also live at the root of CI/CD-template:
+
+```text
+deploy-booking-inventory.yml
+deploy-construct-iq.yml
+deploy-partnergoyal.yml
+deploy-titancrm.yml
+```
+
+Copy those into this control repo’s `.github/workflows/` and use this document
+as the control-repo `README.md`.
